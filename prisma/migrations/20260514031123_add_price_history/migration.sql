@@ -1,0 +1,8 @@
+-- CreateTable
+CREATE TABLE "PriceHistory" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "productId" TEXT NOT NULL,
+    "price" REAL NOT NULL,
+    "date" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PriceHistory_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product" ("code") ON DELETE RESTRICT ON UPDATE CASCADE
+);

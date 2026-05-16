@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id           Int      @id @default(autoincrement())
+  name         String
+  lastName     String?
+  dni          String?  @unique
+  phone        String?
+  observations String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  works        Work[]
+}
+
+model Work {
+  id           Int         @id @default(autoincrement())
+  name         String
+  address      String?
+  observations String?
+  active       Boolean     @default(true)
+  clientId     Int
+  client       Client      @relation(fields: [clientId], references: [id])
+  movements    Movement[]
+  stockpiles   Stockpile[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([clientId])
+}
+
+model Product {
+  code           String         @id
+  description    String
+  category       String?
+  price          Float
+  active         Boolean        @default(true)
+  lastUpdated    DateTime       @default(now())
+  stockpileItems Stockpile[]
+  movementItems  MovementItem[]
+  priceHistory   PriceHistory[]
+}
+
+model PriceHistory {
+  id        Int      @id @default(autoincrement())
+  productId String
+  product   Product  @relation(fields: [productId], references: [code])
+  price     Float
+  date      DateTime @default(now())
+
+  @@index([productId])
+  @@index([date])
+}
+
+model Stockpile {
+  id           Int      @id @default(autoincrement())
+  workId       Int
+  work         Work     @relation(fields: [workId], references: [id])
+  productId    String
+  product      Product  @relation(fields: [productId], references: [code])
+  quantity     Float    // Total units committed
+  price        Float    // Fixed price at time of acopio
+  withdrawn    Float    @default(0) // Units already delivered
+  date         DateTime @default(now())
+  observations String?
+
+  @@index([workId])
+  @@index([productId])
+  @@index([date])
+}
+
+model Movement {
+  id           Int           @id @default(autoincrement())
+  type         String        // PAYMENT, DELIVERY, ADJUSTMENT
+  amount       Float?        // For payments
+  date         DateTime      @default(now())
+  workId       Int
+  work         Work          @relation(fields: [workId], references: [id])
+  items        MovementItem[]
+  withdrawerId Int?
+  withdrawer   Withdrawer?   @relation(fields: [withdrawerId], references: [id])
+  observations String?
+
+  @@index([workId])
+  @@index([type])
+  @@index([date])
+}
+
+model MovementItem {
+  id         Int      @id @default(autoincrement())
+  movementId Int
+  movement   Movement @relation(fields: [movementId], references: [id])
+  productId  String
+  product    Product  @relation(fields: [productId], references: [code])
+  quantity   Float
+  price      Float    // Price at time of movement
+
+  @@index([movementId])
+  @@index([productId])
+}
+
+model Withdrawer {
+  id           Int        @id @default(autoincrement())
+  name         String
+  dni          String?
+  phone        String?
+  observations String?
+  movements    Movement[]
+}

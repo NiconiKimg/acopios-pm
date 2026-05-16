@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80">
+  <!-- Background bar -->
+  <rect width="320" height="80" fill="#c5171a" rx="8"/>
+  <!-- White text: company name -->
+  <text x="20" y="34" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="white" letter-spacing="1">PEDEMONTE</text>
+  <text x="20" y="58" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="400" fill="rgba(255,255,255,0.85)" letter-spacing="3">MATERIALES</text>
+  <!-- Decorative vertical bar -->
+  <rect x="210" y="12" width="3" height="56" fill="rgba(255,255,255,0.3)" rx="2"/>
+  <!-- Icon: building/blocks -->
+  <rect x="225" y="28" width="14" height="24" fill="white" opacity="0.9" rx="1"/>
+  <rect x="243" y="18" width="14" height="34" fill="white" opacity="0.9" rx="1"/>
+  <rect x="261" y="24" width="14" height="28" fill="white" opacity="0.9" rx="1"/>
+  <rect x="225" y="52" width="50" height="3" fill="white" opacity="0.6"/>
+</svg>
