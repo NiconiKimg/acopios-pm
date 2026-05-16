@@ -76,15 +76,19 @@ app.whenReady().then(() => {
   // ── IPC: Products ─────────────────────────────────────────────────────────
   ipcMain.handle('get-products', () => db.getProducts())
 
-  ipcMain.handle('import-products', async () => {
+  ipcMain.handle('analyze-product-import', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
       filters: [{ name: 'Excel Files', extensions: ['xlsx', 'xls'] }]
     })
 
-    if (result.canceled || result.filePaths.length === 0) return 0
-    return db.importProducts(result.filePaths[0])
+    if (result.canceled || result.filePaths.length === 0) return null
+    const filePath = result.filePaths[0]
+    const analysis = await db.analyzeProductImport(filePath)
+    return { filePath, analysis }
   })
+
+  ipcMain.handle('import-products', (_e, filePath: string) => db.importProducts(filePath))
 
   ipcMain.handle('update-product', (_e, code: string, data) => db.updateProduct(code, data))
 

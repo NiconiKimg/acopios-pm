@@ -37,7 +37,8 @@ declare global {
 
       // Products
       getProducts: () => Promise<Product[]>
-      importProducts: () => Promise<number>
+      analyzeProductImport: () => Promise<{ filePath: string, analysis: any[] } | null>
+      importProducts: (filePath: string) => Promise<{ added: number, updated: number, unchanged: number }>
       updateProduct: (code: string, data: UpdateProductInput) => Promise<Product>
       getPriceHistory: (productId: string) => Promise<PriceHistory[]>
 

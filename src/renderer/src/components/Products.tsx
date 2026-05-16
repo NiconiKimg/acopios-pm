@@ -8,7 +8,8 @@ const ITEMS_PER_PAGE = 12
 export default function Products() {
   const { success, error, warning } = useToast()
   const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(false)
+  const [importPreview, setImportPreview] = useState<{ filePath: string, analysis: any[] } | null>(null)
+  const [syncing, setSyncing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
@@ -28,22 +29,31 @@ export default function Products() {
     }
   }
 
-  const handleImport = async () => {
-    setLoading(true)
+  const handleStartSync = async () => {
     try {
-      const count = await window.api.importProducts()
-      if (count > 0) {
-        success(`Se importaron ${count} productos correctamente.`)
-        await loadProducts()
-      } else {
-        warning('No se importaron productos. Verificá el archivo o la operación fue cancelada.')
+      const result = await window.api.analyzeProductImport()
+      if (result) {
+        setImportPreview(result)
       }
     } catch (e) {
-      console.error('[Products] Import error:', e)
-      const msg = e instanceof Error ? e.message : String(e)
-      error(`Error al importar: ${msg}`)
+      console.error('[Products] Analyze error:', e)
+      error('Error al analizar el archivo Excel.')
+    }
+  }
+
+  const handleConfirmSync = async () => {
+    if (!importPreview) return
+    setSyncing(true)
+    try {
+      const result = await window.api.importProducts(importPreview.filePath)
+      success(`Sincronización completa: ${result.added} nuevos, ${result.updated} actualizados.`)
+      setImportPreview(null)
+      await loadProducts()
+    } catch (e) {
+      console.error('[Products] Sync error:', e)
+      error('Error al sincronizar los productos.')
     } finally {
-      setLoading(false)
+      setSyncing(false)
     }
   }
 
@@ -108,12 +118,12 @@ export default function Products() {
           <p className="text-gray-500">Gestión completa de artículos y precios históricos.</p>
         </div>
         <button 
-          onClick={handleImport}
-          disabled={loading}
-          className="bg-[#c5171a] text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-3 hover:bg-red-700 transition-all disabled:opacity-50 shadow-lg shadow-red-100"
+          onClick={handleStartSync}
+          disabled={syncing}
+          className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-3 hover:bg-black transition-all disabled:opacity-50 shadow-lg"
         >
-          {loading ? <RefreshCw className="animate-spin" size={20} /> : <FileSpreadsheet size={20} />}
-          Importar Excel
+          {syncing ? <RefreshCw className="animate-spin" size={20} /> : <RefreshCw size={20} />}
+          Sincronizar Lista
         </button>
       </div>
 
@@ -290,6 +300,85 @@ export default function Products() {
                  </div>
                ))}
                {priceHistory.length === 0 && <p className="text-center py-10 text-gray-400 italic">No hay historial para este producto.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sync Preview Modal */}
+      {importPreview && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-[32px] p-8 w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between mb-8">
+               <div>
+                 <h3 className="text-2xl font-black text-gray-900">Vista Previa de Sincronización</h3>
+                 <p className="text-gray-500 font-medium">Revisa los cambios detectados en el archivo Excel.</p>
+               </div>
+               <button onClick={() => setImportPreview(null)} className="p-2 hover:bg-gray-100 rounded-full transition-all"><X size={28} className="text-gray-400" /></button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 mb-8">
+               <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                  <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Nuevos</p>
+                  <p className="text-2xl font-black text-blue-600">{importPreview.analysis.filter(a => a.type === 'NEW').length}</p>
+               </div>
+               <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
+                  <p className="text-[10px] font-bold text-orange-400 uppercase tracking-widest mb-1">Actualizados</p>
+                  <p className="text-2xl font-black text-orange-600">{importPreview.analysis.filter(a => a.type === 'UPDATE').length}</p>
+               </div>
+               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Sin Cambios</p>
+                  <p className="text-2xl font-black text-gray-400">{importPreview.analysis.filter(a => a.type === 'NO_CHANGE').length}</p>
+               </div>
+            </div>
+
+            <div className="flex-1 overflow-auto pr-2 space-y-3 mb-8">
+               <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest px-2 mb-2">Principales Actualizaciones</h4>
+               {importPreview.analysis.filter(a => a.type !== 'NO_CHANGE').slice(0, 100).map((a, i) => (
+                 <div key={i} className={`p-4 rounded-2xl border ${a.type === 'NEW' ? 'bg-blue-50/30 border-blue-100' : 'bg-gray-50 border-gray-100'} flex items-center justify-between gap-4`}>
+                    <div className="flex-1 min-w-0">
+                       <p className="font-bold text-gray-800 text-sm truncate">{a.description}</p>
+                       <p className="text-[10px] text-gray-400 font-mono">{a.code}</p>
+                    </div>
+                    <div className="text-right whitespace-nowrap">
+                       {a.type === 'UPDATE' ? (
+                         <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400 line-through">${a.oldPrice.toLocaleString()}</span>
+                            <span className="text-sm font-black text-orange-600">${a.newPrice.toLocaleString()}</span>
+                         </div>
+                       ) : (
+                         <span className="text-sm font-black text-blue-600">${a.newPrice.toLocaleString()}</span>
+                       )}
+                       <span className={`text-[10px] font-black uppercase ml-2 ${a.type === 'NEW' ? 'text-blue-500' : 'text-orange-500'}`}>
+                         {a.type === 'NEW' ? 'Nuevo' : 'Precio'}
+                       </span>
+                    </div>
+                 </div>
+               ))}
+               {importPreview.analysis.filter(a => a.type !== 'NO_CHANGE').length > 100 && (
+                 <p className="text-center text-xs text-gray-400 italic py-2">Y {importPreview.analysis.filter(a => a.type !== 'NO_CHANGE').length - 100} cambios más...</p>
+               )}
+               {importPreview.analysis.filter(a => a.type !== 'NO_CHANGE').length === 0 && (
+                 <div className="text-center py-10">
+                    <p className="text-gray-400 italic">No se detectaron cambios respecto a la lista actual.</p>
+                 </div>
+               )}
+            </div>
+
+            <div className="flex gap-4 pt-6 border-t border-gray-100">
+               <button 
+                 onClick={() => setImportPreview(null)} 
+                 className="flex-1 py-4 text-gray-500 font-bold hover:bg-gray-50 rounded-2xl transition-all"
+               >
+                 Cancelar
+               </button>
+               <button 
+                 onClick={handleConfirmSync}
+                 disabled={syncing || importPreview.analysis.filter(a => a.type !== 'NO_CHANGE').length === 0}
+                 className="flex-[2] bg-gray-900 text-white py-4 rounded-2xl font-black text-lg hover:bg-black transition-all shadow-xl disabled:opacity-30"
+               >
+                 {syncing ? 'Sincronizando...' : 'Confirmar y Aplicar Cambios'}
+               </button>
             </div>
           </div>
         </div>

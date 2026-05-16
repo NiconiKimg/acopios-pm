@@ -245,16 +245,46 @@ export const db = {
       orderBy: { description: 'asc' }
     }),
 
-  /** Batch import from Excel. Uses upsert + createMany for price history. */
-  importProducts: async (filePath: string): Promise<number> => {
+  /** Returns a preview of what would happen if the Excel file was imported. */
+  analyzeProductImport: async (filePath: string) => {
     const rawParsed = parseExcel(filePath)
-    if (rawParsed.length === 0) return 0
+    if (rawParsed.length === 0) return []
 
-    // Deduplicate by code — last occurrence wins (same behavior as the original upsert loop)
     const deduped = new Map(rawParsed.map((p) => [p.code, p]))
     const parsed = Array.from(deduped.values())
 
-    // 1. Fetch existing products in ONE query
+    const codes = parsed.map((p) => p.code)
+    const existing = await prisma.product.findMany({
+      where: { code: { in: codes } },
+      select: { code: true, price: true, description: true }
+    })
+    const existingMap = new Map(existing.map((e) => [e.code, e]))
+
+    return parsed.map(p => {
+      const prev = existingMap.get(p.code)
+      let type: 'NEW' | 'UPDATE' | 'NO_CHANGE' = 'NEW'
+      if (prev) {
+        type = prev.price !== p.price ? 'UPDATE' : 'NO_CHANGE'
+      }
+
+      return {
+        code: p.code,
+        description: p.description,
+        oldPrice: prev?.price ?? 0,
+        newPrice: p.price,
+        type
+      }
+    })
+  },
+
+  /** Batch import from Excel. Returns counts of changes. */
+  importProducts: async (filePath: string): Promise<{ added: number, updated: number, unchanged: number }> => {
+    const rawParsed = parseExcel(filePath)
+    if (rawParsed.length === 0) return { added: 0, updated: 0, unchanged: 0 }
+
+    const deduped = new Map(rawParsed.map((p) => [p.code, p]))
+    const parsed = Array.from(deduped.values())
+
     const codes = parsed.map((p) => p.code)
     const existing = await prisma.product.findMany({
       where: { code: { in: codes } },
@@ -262,11 +292,12 @@ export const db = {
     })
     const existingMap = new Map(existing.map((e) => [e.code, e.price]))
 
-    // 2. Separate creates from updates
     const toCreate = parsed.filter((p) => !existingMap.has(p.code))
-    const toUpdate = parsed.filter((p) => existingMap.has(p.code))
+    const toUpdate = parsed.filter((p) => {
+      const prev = existingMap.get(p.code)
+      return prev !== undefined && (prev !== p.price || true) // We update description too
+    })
 
-    // 3. Price history entries: only for new products or changed prices
     const priceHistoryEntries = parsed
       .filter((p) => {
         const prev = existingMap.get(p.code)
@@ -274,7 +305,6 @@ export const db = {
       })
       .map((p) => ({ productId: p.code, price: p.price }))
 
-    // 4a. Bulk-create new products (outside interactive tx to avoid timeout)
     if (toCreate.length > 0) {
       await prisma.product.createMany({
         data: toCreate.map((p) => ({
@@ -286,10 +316,13 @@ export const db = {
       })
     }
 
-    // 4b. Update existing products in chunks to avoid hitting SQLite limits
     const CHUNK = 50
+    let updatedCount = 0
     for (let i = 0; i < toUpdate.length; i += CHUNK) {
       const chunk = toUpdate.slice(i, i + CHUNK)
+      const changedChunk = chunk.filter(p => existingMap.get(p.code) !== p.price)
+      updatedCount += changedChunk.length
+
       await prisma.$transaction(
         chunk.map((p) =>
           prisma.product.update({
@@ -305,12 +338,15 @@ export const db = {
       )
     }
 
-    // 4c. Bulk-create price history (after products are committed)
     if (priceHistoryEntries.length > 0) {
       await prisma.priceHistory.createMany({ data: priceHistoryEntries })
     }
 
-    return parsed.length
+    return {
+      added: toCreate.length,
+      updated: updatedCount,
+      unchanged: parsed.length - toCreate.length - updatedCount
+    }
   },
 
 

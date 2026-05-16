@@ -26,7 +26,8 @@ const api = {
 
   // ── Products ──────────────────────────────────────────────────────────────
   getProducts: () => ipcRenderer.invoke('get-products'),
-  importProducts: () => ipcRenderer.invoke('import-products'),
+  analyzeProductImport: () => ipcRenderer.invoke('analyze-product-import'),
+  importProducts: (filePath: string) => ipcRenderer.invoke('import-products', filePath),
   updateProduct: (code: string, data: UpdateProductInput) =>
     ipcRenderer.invoke('update-product', code, data),
   getPriceHistory: (productId: string) => ipcRenderer.invoke('get-price-history', productId),
