@@ -58,6 +58,7 @@ model PriceHistory {
 
   @@index([productId])
   @@index([date])
+  @@index([productId, date])
 }
 
 model Stockpile {

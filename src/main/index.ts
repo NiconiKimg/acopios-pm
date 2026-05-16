@@ -107,6 +107,8 @@ app.whenReady().then(() => {
   ipcMain.handle('create-movement', (_e, data) => db.createMovement(data))
 
   // ── IPC: Dashboard ────────────────────────────────────────────────────────
+  ipcMain.handle('get-price-at-date', (_e, productId: string, date: string) => db.getPriceAtDate(productId, new Date(date)))
+  ipcMain.handle('get-work-frozen-date', (_e, workId: number) => db.getWorkFrozenDate(workId))
   ipcMain.handle('get-stats', () => db.getStats())
 
   // ── IPC: Config ───────────────────────────────────────────────────────────

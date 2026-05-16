@@ -44,6 +44,8 @@ const api = {
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
   getStats: () => ipcRenderer.invoke('get-stats'),
+  getPriceAtDate: (productId: string, date: string) => ipcRenderer.invoke('get-price-at-date', productId, date),
+  getWorkFrozenDate: (workId: number) => ipcRenderer.invoke('get-work-frozen-date', workId),
 
   // ── Config ────────────────────────────────────────────────────────────────
   getCompanyConfig: () => ipcRenderer.invoke('get-company-config'),

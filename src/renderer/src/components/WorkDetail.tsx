@@ -44,12 +44,21 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
     observations: '',
     isOwner: false
   })
+  const [frozenDate, setFrozenDate] = useState<string | null>(null)
 
   useEffect(() => {
     refreshData()
     loadProducts()
     loadCompany()
   }, [])
+
+  useEffect(() => {
+    if (view === 'CREATE_DELIVERY') {
+      window.api.getWorkFrozenDate(work.id).then(setFrozenDate)
+    } else {
+      setFrozenDate(null)
+    }
+  }, [view])
 
   const refreshData = useCallback(async () => {
     try {
@@ -143,14 +152,23 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
     }])
   }
 
-  const addNewProductToDelivery = (product: any) => {
+  const addNewProductToDelivery = async (product: any) => {
+    let priceToUse = product.price
+    let isFrozen = false
+    
+    if (frozenDate) {
+      priceToUse = await window.api.getPriceAtDate(product.code, frozenDate)
+      isFrozen = true
+    }
+
     setDeliveryItems([...deliveryItems, {
       stockpileId: null,
       productId: product.code,
       description: product.description,
       quantity: 1,
       max: 0,
-      price: product.price
+      price: priceToUse,
+      isFrozen
     }])
   }
 
@@ -383,7 +401,12 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
              <button onClick={() => setView('SUMMARY')} className="p-2 hover:bg-gray-100 rounded-full transition-all"><X size={24} /></button>
              <div>
                <h2 className="text-2xl font-bold text-gray-800">Registrar Entrega</h2>
-               <p className="text-gray-500">Los materiales excedentes se cargarán al precio actual.</p>
+               <p className="text-gray-500">
+                 {frozenDate 
+                   ? `Usando precios congelados por saldo (Pago del ${new Date(frozenDate).toLocaleDateString()}).` 
+                   : 'Los materiales excedentes se cargarán al precio actual.'
+                 }
+               </p>
              </div>
           </div>
           <button onClick={handleSaveDelivery} disabled={deliveryItems.length === 0 || saving} className="bg-gray-900 text-white px-8 py-3 rounded-2xl font-bold hover:bg-black transition-all shadow-lg disabled:opacity-30">{saving ? 'Guardando...' : 'Confirmar Entrega'}</button>
@@ -415,7 +438,14 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
                       <div key={idx} className="flex items-center gap-6 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                          <div className="flex-1">
                             <p className="font-bold text-gray-800 text-sm">{item.description}</p>
-                            {!item.stockpileId && <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded font-black uppercase">Extra - Precio Actual</span>}
+                            {!item.stockpileId && (
+                               <div className="flex items-center gap-2 mt-1">
+                                 <p className="text-[10px] font-bold text-gray-500">${item.price.toLocaleString('es-AR')}</p>
+                                 <span className={`text-[10px] px-2 py-0.5 rounded font-black uppercase ${item.isFrozen ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
+                                   {item.isFrozen ? 'Extra - Precio Congelado' : 'Extra - Precio Actual'}
+                                 </span>
+                               </div>
+                            )}
                          </div>
                          <div className="flex items-center gap-3">
                             <button onClick={() => updateQty(deliveryItems, idx, setDeliveryItems, -1)} className="p-1 hover:bg-gray-100 rounded text-gray-400"><Minus size={14} /></button>

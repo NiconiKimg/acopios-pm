@@ -53,6 +53,8 @@ declare global {
 
       // Dashboard
       getStats: () => Promise<DashboardStats>
+      getPriceAtDate: (productId: string, date: string) => Promise<number>
+      getWorkFrozenDate: (workId: number) => Promise<string | null>
 
       // Config
       getCompanyConfig: () => Promise<CompanyConfig>

@@ -350,6 +350,55 @@ export const db = {
   },
 
 
+  /** Returns the price of a product at a specific date by looking at history. */
+  getPriceAtDate: async (productId: string, date: Date) => {
+    const history = await prisma.priceHistory.findFirst({
+      where: {
+        productId,
+        date: { lte: date }
+      },
+      orderBy: { date: 'desc' }
+    })
+    if (history) return history.price
+
+    // Fallback to current price if no history exists before that date
+    const product = await prisma.product.findUnique({ where: { code: productId } })
+    return product?.price ?? 0
+  },
+
+  /** 
+   * Finds the "Frozen Date" for a work.
+   * This is the date of the oldest payment that hasn't been "consumed" yet by stockpiles.
+   */
+  getWorkFrozenDate: async (workId: number) => {
+    const [payments, stockpiles] = await Promise.all([
+      prisma.movement.findMany({
+        where: { workId, type: 'PAYMENT' },
+        orderBy: { date: 'asc' },
+        select: { amount: true, date: true }
+      }),
+      prisma.stockpile.findMany({
+        where: { workId },
+        select: { quantity: true, price: true }
+      })
+    ])
+
+    const totalConsumed = stockpiles.reduce((acc, s) => acc + (s.quantity * s.price), 0)
+    const totalPaid = payments.reduce((acc, p) => acc + (p.amount ?? 0), 0)
+
+    if (totalPaid <= totalConsumed) return null // No balance available to freeze
+
+    let runningTotal = 0
+    for (const p of payments) {
+      runningTotal += (p.amount ?? 0)
+      if (runningTotal > totalConsumed) {
+        return p.date.toISOString()
+      }
+    }
+
+    return null
+  },
+
   updateProduct: async (
     code: string,
     data: Partial<{
