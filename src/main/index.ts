@@ -115,6 +115,10 @@ app.whenReady().then(() => {
     db.getGlobalHistory(page, pageSize, search)
   )
 
+  ipcMain.handle('get-deliveries', (_e, page?: number, pageSize?: number, filters?: any) =>
+    db.getDeliveries(page, pageSize, filters)
+  )
+
   // ── IPC: Backup ───────────────────────────────────────────────────────────
   ipcMain.handle('create-backup', async () => {
     const result = await dialog.showSaveDialog({
@@ -127,9 +131,21 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('open-pdf', async (_e, buffer: ArrayBuffer, fileName: string) => {
-    const tempPath = join(app.getPath('temp'), fileName)
+    // Add timestamp to avoid EBUSY if file is already open
+    const timestamp = Date.now()
+    const nameWithTimestamp = fileName.replace('.pdf', `_${timestamp}.pdf`)
+    const tempPath = join(app.getPath('temp'), nameWithTimestamp)
     fs.writeFileSync(tempPath, Buffer.from(buffer))
     await shell.openPath(tempPath)
+    return true
+  })
+
+  ipcMain.handle('show-item-in-folder', async (_e, buffer: ArrayBuffer, fileName: string) => {
+    const timestamp = Date.now()
+    const nameWithTimestamp = fileName.replace('.pdf', `_${timestamp}.pdf`)
+    const tempPath = join(app.getPath('temp'), nameWithTimestamp)
+    fs.writeFileSync(tempPath, Buffer.from(buffer))
+    shell.showItemInFolder(tempPath)
     return true
   })
 

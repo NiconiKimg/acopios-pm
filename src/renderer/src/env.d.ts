@@ -59,9 +59,14 @@ declare global {
 
       // History
       getGlobalHistory: (page?: number, pageSize?: number, search?: string) => Promise<GlobalHistoryResponse>
+      getDeliveries: (page?: number, pageSize?: number, filters?: { search?: string, startDate?: string, endDate?: string }) => Promise<{ items: Movement[], total: number, page: number, pageSize: number }>
 
       // Backup
       createBackup: () => Promise<BackupResult>
+
+      // PDF
+      openPdf: (buffer: ArrayBuffer, fileName: string) => Promise<boolean>
+      showItemInFolder: (buffer: ArrayBuffer, fileName: string) => Promise<boolean>
     }
   }
 }

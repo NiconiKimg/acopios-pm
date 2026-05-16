@@ -52,11 +52,15 @@ const api = {
   getGlobalHistory: (page?: number, pageSize?: number, search?: string) =>
     ipcRenderer.invoke('get-global-history', page, pageSize, search),
 
+  getDeliveries: (page?: number, pageSize?: number, filters?: any) =>
+    ipcRenderer.invoke('get-deliveries', page, pageSize, filters),
+
   // ── Backup ────────────────────────────────────────────────────────────────
   createBackup: () => ipcRenderer.invoke('create-backup'),
 
   // ── PDF ───────────────────────────────────────────────────────────────────
-  openPdf: (buffer: ArrayBuffer, fileName: string) => ipcRenderer.invoke('open-pdf', buffer, fileName)
+  openPdf: (buffer: ArrayBuffer, fileName: string) => ipcRenderer.invoke('open-pdf', buffer, fileName),
+  showItemInFolder: (buffer: ArrayBuffer, fileName: string) => ipcRenderer.invoke('show-item-in-folder', buffer, fileName)
 }
 
 if (process.contextIsolated) {

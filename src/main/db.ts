@@ -475,5 +475,63 @@ export const db = {
     const items = combined.slice((page - 1) * pageSize, page * pageSize)
 
     return { items, total, page, pageSize }
+  },
+
+  getDeliveries: async (page = 1, pageSize = 20, filters?: { search?: string, startDate?: string, endDate?: string }) => {
+    const skip = (page - 1) * pageSize
+
+    // For better performance, we'll try to use prisma filters as much as possible
+    const where: any = {
+      type: 'DELIVERY'
+    }
+
+    if (filters?.startDate || filters?.endDate) {
+      where.date = {}
+      if (filters.startDate) where.date.gte = new Date(filters.startDate)
+      if (filters.endDate) {
+        const end = new Date(filters.endDate)
+        end.setHours(23, 59, 59, 999)
+        where.date.lte = end
+      }
+    }
+
+    // SQLite doesn't support complex nested searches well with Prisma 'where',
+    // but we can search in withdrawer or work name if search is simple.
+    // For more complex search (client name), we might need to filter in memory 
+    // or use a raw query, but let's stick to Prisma and fetch more if needed.
+    
+    const [items, total] = await Promise.all([
+      prisma.movement.findMany({
+        where,
+        include: {
+          work: { include: { client: true } },
+          items: { include: { product: true } },
+          withdrawer: true
+        },
+        orderBy: { date: 'desc' },
+        skip,
+        take: pageSize
+      }),
+      prisma.movement.count({ where })
+    ])
+
+    // Apply client name search in memory if provided
+    let filteredItems = items
+    if (filters?.search) {
+      const q = filters.search.toLowerCase()
+      filteredItems = items.filter(m => {
+        const clientName = `${m.work.client.name} ${m.work.client.lastName ?? ''}`.toLowerCase()
+        const withdrawerName = m.withdrawer?.name.toLowerCase() ?? ''
+        const workName = m.work.name.toLowerCase()
+        return clientName.includes(q) || withdrawerName.includes(q) || workName.includes(q)
+      })
+    }
+
+    return {
+      items: filteredItems,
+      total,
+      page,
+      pageSize
+    }
   }
 }

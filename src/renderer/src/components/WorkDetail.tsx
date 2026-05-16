@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { ArrowLeft, Wallet, Package, History, MessageCircle, ClipboardCheck, Trash2, Plus, X, Printer, Search, Minus } from 'lucide-react'
-import { generateRemito } from '../utils/pdf'
+import { ArrowLeft, Wallet, Package, History, MessageCircle, ClipboardCheck, Trash2, Plus, X, Printer, Search, Minus, Folder } from 'lucide-react'
+import { generateRemito, shareRemitoWhatsApp, saveRemito } from '../utils/pdf'
 import { useToast } from './Toast'
 import type { Stockpile, Movement, Product, CompanyConfig } from '../types'
 
@@ -18,7 +18,7 @@ interface WorkDetailProps {
 type ViewState = 'SUMMARY' | 'CREATE_STOCKPILE' | 'CREATE_DELIVERY' | 'CREATE_PAYMENT'
 
 export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProps) {
-  const { success, error: toastError, warning } = useToast()
+  const { success, error, warning } = useToast()
   const [work] = useState(initialWork)
   const [stockpiles, setStockpiles] = useState<Stockpile[]>([])
   const [movements, setMovements] = useState<Movement[]>([])
@@ -125,7 +125,7 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
       success('Acopio registrado correctamente.')
     } catch (err) {
       console.error('[WorkDetail] saveStockpiles failed:', err)
-      toastError('Error al guardar el acopio.')
+      error('Error al guardar el acopio.')
     } finally {
       setSaving(false)
     }
@@ -182,7 +182,7 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
       success('Entrega registrada correctamente.')
     } catch (err) {
       console.error('[WorkDetail] saveDelivery failed:', err)
-      toastError('Error al registrar la entrega.')
+      error('Error al registrar la entrega.')
     } finally {
       setSaving(false)
     }
@@ -199,7 +199,7 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
       success('Pago registrado correctamente.')
     } catch (err) {
       console.error('[WorkDetail] savePayment failed:', err)
-      toastError('Error al registrar el pago.')
+      error('Error al registrar el pago.')
     } finally {
       setSaving(false)
     }
@@ -248,7 +248,7 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
       success('Remito generado correctamente.')
     } catch (err) {
       console.error('[WorkDetail] generateRemito failed:', err)
-      toastError('No se pudo generar el remito. Verificá la consola.')
+      error('No se pudo generar el remito. Verificá la consola.')
     }
   }
 
@@ -514,17 +514,46 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
                         <p className="text-[10px] text-gray-400">{new Date(m.date).toLocaleString('es-AR')}</p>
                       </div>
                    </div>
-                   <div className="flex items-center gap-4">
-                      {m.type === 'PAYMENT' ? (
-                        <p className="font-black text-green-600 text-sm">+$ {(m.amount ?? 0).toLocaleString()}</p>
-                      ) : (
-                        <button 
-                          onClick={() => handlePrintRemito(m)}
-                          className="flex items-center gap-2 px-3 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all text-xs font-bold"
-                        >
-                          <Printer size={14} /> Remito
-                        </button>
-                      )}
+                   <div className="flex items-center gap-2">
+                       {m.type === 'PAYMENT' ? (
+                         <p className="font-black text-green-600 text-sm">+$ {(m.amount ?? 0).toLocaleString()}</p>
+                       ) : (
+                         <>
+                           <button 
+                             onClick={() => handlePrintRemito(m)}
+                             className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all"
+                             title="Ver/Imprimir Remito"
+                           >
+                             <Printer size={14} />
+                           </button>
+                           <button 
+                             onClick={() => {
+                               const sent = shareRemitoWhatsApp(m, work as any)
+                               if (!sent) warning('El cliente no tiene teléfono registrado.')
+                             }}
+                             className="p-2 bg-green-50 text-[#25D366] rounded-lg hover:bg-green-100 transition-all"
+                             title="Enviar resumen por WhatsApp"
+                           >
+                             <MessageCircle size={14} />
+                           </button>
+                           <button 
+                             onClick={async () => {
+                               if (company) {
+                                 try {
+                                   await saveRemito(m, work as any, company)
+                                   success('Carpeta abierta con el PDF.')
+                                 } catch {
+                                   error('No se pudo abrir la carpeta.')
+                                 }
+                               }
+                             }}
+                             className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-all"
+                             title="Abrir ubicación del PDF (para enviar archivo)"
+                           >
+                             <Folder size={14} />
+                           </button>
+                         </>
+                       )}
                    </div>
                  </div>
                </div>

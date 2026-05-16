@@ -158,6 +158,13 @@ export interface GlobalHistoryResponse {
   pageSize: number
 }
 
+export interface DeliveriesResponse {
+  items: Movement[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 // Form input types (what the renderer sends to the main process)
 export interface CreateClientInput {
   name: string

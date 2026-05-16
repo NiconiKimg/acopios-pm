@@ -1,5 +1,6 @@
 import { ReactNode } from 'react'
-import { LayoutDashboard, Users, Package, Settings, ClipboardCheck } from 'lucide-react'
+import { LayoutDashboard, Users, Package, Settings, ClipboardCheck, Truck } from 'lucide-react'
+import logoUrl from '../assets/company_logo.svg'
 
 interface LayoutProps {
   children: ReactNode
@@ -12,6 +13,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
     { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
     { id: 'clients', label: 'Clientes', icon: Users },
     { id: 'acopios', label: 'Acopios', icon: ClipboardCheck },
+    { id: 'deliveries', label: 'Entregas', icon: Truck },
     { id: 'inventory', label: 'Productos', icon: Package },
     // { id: 'history', label: 'Historial', icon: History },
   ]
@@ -22,13 +24,8 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-6">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-[#c5171a] rounded-lg flex items-center justify-center text-white font-bold text-xl">
-              P
-            </div>
-            <h1 className="text-xl font-bold text-[#c5171a] leading-tight">
-              Pedemonte<br/><span className="text-gray-400 font-medium text-sm">Materiales</span>
-            </h1>
+          <div className="flex items-center justify-center mb-16 py-4">
+            <img src={logoUrl} alt="Logo" className="h-20 w-auto object-contain" />
           </div>
 
           <nav className="space-y-1">
