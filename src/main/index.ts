@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
+import * as fs from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { db } from './db'
 import { createBackup } from './backups'
@@ -123,6 +124,13 @@ app.whenReady().then(() => {
 
     if (result.canceled || !result.filePath) return { success: false }
     return createBackup(result.filePath)
+  })
+
+  ipcMain.handle('open-pdf', async (_e, buffer: ArrayBuffer, fileName: string) => {
+    const tempPath = join(app.getPath('temp'), fileName)
+    fs.writeFileSync(tempPath, Buffer.from(buffer))
+    await shell.openPath(tempPath)
+    return true
   })
 
   createWindow()

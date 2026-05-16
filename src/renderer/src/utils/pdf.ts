@@ -107,10 +107,10 @@ export const generateRemito = async (
 
   // ── COMPANY & DATE INFO BAR ───────────────────────────────────────────────
   doc.setFillColor(...LIGHT_GRAY)
-  doc.rect(margin, y, pw - margin * 2, 22, 'F')
+  doc.rect(margin, y, pw - margin * 2, 30, 'F')
   doc.setDrawColor(...GRAY)
   doc.setLineWidth(0.3)
-  doc.rect(margin, y, pw - margin * 2, 22, 'D')
+  doc.rect(margin, y, pw - margin * 2, 30, 'D')
 
   // Left: company details
   doc.setFontSize(8)
@@ -140,14 +140,7 @@ export const generateRemito = async (
   doc.setTextColor(...GRAY)
   doc.text(formatDate(delivery.date), rX, y + 10)
 
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...DARK)
-  doc.text('N° REMITO', rX + 55, y + 5)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(...GRAY)
-  doc.text(`#${String(delivery.id).padStart(6, '0')}`, rX + 55, y + 10)
-
-  y += 28
+  y += 36
 
   // ── CLIENT / WORK DATA SECTION ────────────────────────────────────────────
   const halfW = (pw - margin * 2 - 4) / 2
@@ -205,12 +198,15 @@ export const generateRemito = async (
   doc.setFontSize(8.5)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(...DARK)
-  doc.text(delivery.withdrawer?.name ?? 'Titular de la obra', rx2 + 3, ry)
+  const withdrawerName = delivery.withdrawer?.name 
+    ?? (work.client ? `${work.client.name} ${work.client.lastName ?? ''}`.trim() : 'Titular de la obra')
+  doc.text(withdrawerName, rx2 + 3, ry)
   ry += 5
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.setTextColor(...GRAY)
-  doc.text(`DNI: ${delivery.withdrawer?.dni ?? '—'}`, rx2 + 3, ry)
+  const withdrawerDni = delivery.withdrawer?.dni ?? work.client?.dni ?? '—'
+  doc.text(`DNI: ${withdrawerDni}`, rx2 + 3, ry)
   ry += 4.5
   if (delivery.withdrawer?.phone) {
     doc.text(`Tel: ${delivery.withdrawer.phone}`, rx2 + 3, ry)
@@ -331,11 +327,10 @@ export const generateRemito = async (
   const dateStr = new Date(delivery.date).toISOString().split('T')[0]
   const fileName = `Remito_${clientName}_${dateStr}_#${String(delivery.id).padStart(6, '0')}.pdf`
 
-  // Option A: Save the file (standard)
-  doc.save(fileName)
+  // Set document properties for the "Save" name in browser print preview
+  doc.setProperties({ title: fileName.replace('.pdf', '') })
 
-  // Option B: Open print dialog (convenient)
-  doc.autoPrint()
-  const blobUrl = doc.output('bloburl')
-  window.open(blobUrl, '_blank')
+  // Open via native system PDF viewer (more reliable in Electron)
+  const pdfBuffer = doc.output('arraybuffer')
+  await (window as any).api.openPdf(pdfBuffer, fileName)
 }

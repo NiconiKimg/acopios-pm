@@ -160,6 +160,7 @@ export const db = {
       include: {
         works: {
           include: {
+            client: true,
             movements: {
               include: {
                 items: { include: { product: true } },

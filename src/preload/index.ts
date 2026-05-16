@@ -53,7 +53,10 @@ const api = {
     ipcRenderer.invoke('get-global-history', page, pageSize, search),
 
   // ── Backup ────────────────────────────────────────────────────────────────
-  createBackup: () => ipcRenderer.invoke('create-backup')
+  createBackup: () => ipcRenderer.invoke('create-backup'),
+
+  // ── PDF ───────────────────────────────────────────────────────────────────
+  openPdf: (buffer: ArrayBuffer, fileName: string) => ipcRenderer.invoke('open-pdf', buffer, fileName)
 }
 
 if (process.contextIsolated) {
