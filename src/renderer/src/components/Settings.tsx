@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Database, ShieldCheck, HardDrive, RefreshCw, Building2, Save } from 'lucide-react'
+import { Database, ShieldCheck, HardDrive, RefreshCw, Building2, Save, UploadCloud } from 'lucide-react'
 import { useToast } from './Toast'
 import type { CompanyConfig } from '../types'
 
 export default function Settings() {
   const { success, error } = useToast()
   const [backupLoading, setBackupLoading] = useState(false)
+  const [restoreLoading, setRestoreLoading] = useState(false)
   const [lastBackup, setLastBackup] = useState<string | null>(null)
   const [config, setConfig] = useState<CompanyConfig>({ name: '', address: '', phone: '', email: '', cuit: '' })
   const [configSaving, setConfigSaving] = useState(false)
@@ -33,6 +34,21 @@ export default function Settings() {
       error('Error de sistema al procesar el backup.')
     } finally {
       setBackupLoading(false)
+    }
+  }
+
+  const handleRestore = async () => {
+    setRestoreLoading(true)
+    try {
+      const result = await window.api.restoreBackup()
+      if (result && !result.success && result.error) {
+        error(`Error al restaurar copia: ${result.error}`)
+      }
+    } catch (e) {
+      console.error(e)
+      error('Error de sistema al restaurar el backup.')
+    } finally {
+      setRestoreLoading(false)
     }
   }
 
@@ -67,7 +83,7 @@ export default function Settings() {
             </div>
             <div>
               <h3 className="font-bold text-gray-800">Datos de la Empresa</h3>
-              <p className="text-xs text-gray-400">Se usan en los remitos PDF generados</p>
+              <p className="text-xs text-gray-400">Se usan en los comprobantes de entrega PDF generados</p>
             </div>
           </div>
 
@@ -124,14 +140,27 @@ export default function Settings() {
               <p className="text-xs text-gray-500 leading-relaxed mb-6">
                 Se recomienda realizar copias de seguridad semanales en una unidad externa para evitar pérdida de datos.
               </p>
-              <button
-                onClick={handleBackup}
-                disabled={backupLoading}
-                className="w-full py-4 bg-gray-800 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-3 shadow-lg shadow-gray-200 disabled:opacity-50"
-              >
-                {backupLoading ? <RefreshCw className="animate-spin" size={20} /> : <HardDrive size={20} />}
-                {backupLoading ? 'Creando...' : 'Crear Copia de Seguridad'}
-              </button>
+              
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handleBackup}
+                  disabled={backupLoading || restoreLoading}
+                  className="w-full py-4 bg-gray-800 text-white rounded-xl font-bold hover:bg-black transition-all flex items-center justify-center gap-3 shadow-lg shadow-gray-200 disabled:opacity-50"
+                >
+                  {backupLoading ? <RefreshCw className="animate-spin" size={20} /> : <HardDrive size={20} />}
+                  {backupLoading ? 'Creando...' : 'Crear Copia de Seguridad'}
+                </button>
+
+                <button
+                  onClick={handleRestore}
+                  disabled={backupLoading || restoreLoading}
+                  className="w-full py-4 bg-white text-gray-700 rounded-xl font-bold hover:bg-gray-100 transition-all flex items-center justify-center gap-3 border border-gray-200 shadow-sm disabled:opacity-50"
+                >
+                  {restoreLoading ? <RefreshCw className="animate-spin" size={20} /> : <UploadCloud size={20} />}
+                  {restoreLoading ? 'Restaurando...' : 'Restaurar Copia de Seguridad'}
+                </button>
+              </div>
+
               {lastBackup && (
                 <p className="text-[10px] text-center text-gray-400 mt-4 uppercase font-bold tracking-widest">
                   Último backup: {lastBackup}

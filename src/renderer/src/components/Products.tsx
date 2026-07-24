@@ -1,18 +1,19 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Search, RefreshCw, FileSpreadsheet, Edit2, Trash2, ChevronLeft, ChevronRight, History, X } from 'lucide-react'
+import { Search, RefreshCw, Edit2, Trash2, ChevronLeft, ChevronRight, History, X, Plus } from 'lucide-react'
 import { useToast } from './Toast'
 import type { Product } from '../types'
 
 const ITEMS_PER_PAGE = 12
 
 export default function Products() {
-  const { success, error, warning } = useToast()
+  const { success, error } = useToast()
   const [products, setProducts] = useState<Product[]>([])
   const [importPreview, setImportPreview] = useState<{ filePath: string, analysis: any[] } | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [creatingProduct, setCreatingProduct] = useState<{ code: string; description: string; category?: string; price: number } | null>(null)
   const [historyProduct, setHistoryProduct] = useState<Product | null>(null)
   const [priceHistory, setPriceHistory] = useState<Array<{ id: number; price: number; date: string }>>([])
 
@@ -85,6 +86,23 @@ export default function Products() {
     }
   }
 
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!creatingProduct) return
+    try {
+      await window.api.createProduct({
+        ...creatingProduct,
+        price: typeof creatingProduct.price === 'string' ? parseFloat(creatingProduct.price) : creatingProduct.price
+      })
+      setCreatingProduct(null)
+      await loadProducts()
+      success('Producto creado exitosamente.')
+    } catch (e: any) {
+      console.error(e)
+      error('Error al crear el producto (verifica que el código no exista).')
+    }
+  }
+
   const viewHistory = async (product: Product) => {
     try {
       const history = await window.api.getPriceHistory(product.code)
@@ -117,14 +135,23 @@ export default function Products() {
           <h2 className="text-2xl font-bold text-gray-800">Catálogo de Productos</h2>
           <p className="text-gray-500">Gestión completa de artículos y precios históricos.</p>
         </div>
-        <button 
-          onClick={handleStartSync}
-          disabled={syncing}
-          className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-3 hover:bg-black transition-all disabled:opacity-50 shadow-lg"
-        >
-          {syncing ? <RefreshCw className="animate-spin" size={20} /> : <RefreshCw size={20} />}
-          Sincronizar Lista
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setCreatingProduct({ code: '', description: '', category: '', price: 0 })}
+            className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg"
+          >
+            <Plus size={20} />
+            Nuevo Producto
+          </button>
+          <button 
+            onClick={handleStartSync}
+            disabled={syncing}
+            className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-3 hover:bg-black transition-all disabled:opacity-50 shadow-lg"
+          >
+            {syncing ? <RefreshCw className="animate-spin" size={20} /> : <RefreshCw size={20} />}
+            Sincronizar Lista
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
@@ -272,6 +299,69 @@ export default function Products() {
               <div className="flex gap-4 mt-8 pt-4 border-t">
                 <button type="button" onClick={() => setEditingProduct(null)} className="flex-1 py-3 text-gray-500 font-bold">Cancelar</button>
                 <button type="submit" className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold">Guardar Cambios</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Product Modal */}
+      {creatingProduct && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl">
+            <h3 className="text-xl font-bold mb-6">Nuevo Producto</h3>
+            <form onSubmit={handleCreateProduct} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-2 uppercase">Código Único</label>
+                <input 
+                  type="text" required
+                  placeholder="Ej: AB123"
+                  className="w-full px-4 py-3 bg-gray-50 rounded-xl uppercase"
+                  value={creatingProduct.code}
+                  onChange={e => setCreatingProduct({...creatingProduct, code: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-2 uppercase">Descripción</label>
+                <input 
+                  type="text" required
+                  className="w-full px-4 py-3 bg-gray-50 rounded-xl"
+                  value={creatingProduct.description}
+                  onChange={e => setCreatingProduct({...creatingProduct, description: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-2 uppercase">Categoría (Opcional)</label>
+                <input 
+                  type="text"
+                  className="w-full px-4 py-3 bg-gray-50 rounded-xl"
+                  value={creatingProduct.category ?? ''}
+                  onChange={e => setCreatingProduct({...creatingProduct, category: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-2 uppercase">Precio Neto ($)</label>
+                  <input 
+                    type="number" step="0.01" required
+                    className="w-full px-4 py-3 bg-gray-50 rounded-xl font-bold"
+                    value={String(creatingProduct.price)}
+                    onChange={e => setCreatingProduct({...creatingProduct, price: parseFloat(e.target.value) || 0})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-2 uppercase">Precio c/IVA ($)</label>
+                  <input 
+                    type="number" step="0.01" required
+                    className="w-full px-4 py-3 bg-red-50 text-[#c5171a] rounded-xl font-bold"
+                    value={(creatingProduct.price * 1.21).toFixed(2)}
+                    onChange={e => setCreatingProduct({...creatingProduct, price: parseFloat((parseFloat(e.target.value) / 1.21).toFixed(2))})}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-4 mt-8 pt-4 border-t">
+                <button type="button" onClick={() => setCreatingProduct(null)} className="flex-1 py-3 text-gray-500 font-bold">Cancelar</button>
+                <button type="submit" className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold">Crear Producto</button>
               </div>
             </form>
           </div>

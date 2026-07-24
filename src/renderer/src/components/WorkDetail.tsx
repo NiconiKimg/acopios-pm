@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { ArrowLeft, Wallet, Package, History, MessageCircle, ClipboardCheck, Trash2, Plus, X, Printer, Search, Minus, Folder } from 'lucide-react'
+import { ArrowLeft, Wallet, Package, History, MessageCircle, ClipboardCheck, Trash2, Plus, X, Printer, Search, Minus, Folder, AlertTriangle } from 'lucide-react'
 import { generateRemito, shareRemitoWhatsApp, saveRemito } from '../utils/pdf'
 import { useToast } from './Toast'
 import type { Stockpile, Movement, Product, CompanyConfig } from '../types'
@@ -97,13 +97,40 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
       productId: product.code, 
       description: product.description,
       quantity: 1, 
-      price: product.price 
+      price: product.price,
+      originalPrice: product.price
     }])
     setProductSearch('')
   }
 
-  const handleSaveStockpiles = async () => {
-    if (stockpileItems.length === 0) return
+  // --- Price Update Modal State ---
+  const [showPriceModal, setShowPriceModal] = useState(false)
+  const [priceUpdateItems, setPriceUpdateItems] = useState<any[]>([])
+  const [selectedUpdates, setSelectedUpdates] = useState<string[]>([])
+
+  const handleSaveStockpilesClick = async () => {
+    try {
+      if (stockpileItems.length === 0) return
+      const changedItems = stockpileItems.filter(item => {
+        const p1 = parseFloat(item.price)
+        const p2 = parseFloat(item.originalPrice ?? item.price)
+        return p1 !== p2 && !isNaN(p1) && !isNaN(p2)
+      })
+      if (changedItems.length > 0) {
+        setPriceUpdateItems(changedItems)
+        setSelectedUpdates(changedItems.map(i => i.productId))
+        setShowPriceModal(true)
+      } else {
+        await executeSaveStockpiles([])
+      }
+    } catch (err: any) {
+      console.error('[WorkDetail] handleSaveStockpilesClick failed:', err)
+      error('Error al iniciar el guardado.')
+    }
+  }
+
+  const executeSaveStockpiles = async (updateProductIds: string[]) => {
+    setShowPriceModal(false)
     const newItemsValue = stockpileItems.reduce((acc, item) => acc + (parseFloat(item.quantity || '0') * parseFloat(item.price || '0')), 0)
     const currentPaid = movements.filter(m => m.type === 'PAYMENT').reduce((acc, m) => acc + (m.amount || 0), 0)
     const currentStockpiled = stockpiles.reduce((acc, s) => acc + (s.quantity * s.price), 0)
@@ -123,6 +150,9 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
           price: parseFloat(item.price),
           observations: newItemsValue <= totalCoverage ? 'TOTALMENTE PAGO' : 'PAGO PARCIAL / DEUDA'
         })
+        if (updateProductIds.includes(item.productId)) {
+          await window.api.updateProduct(item.productId, { price: parseFloat(item.price) })
+        }
       }
       if (additionalPayment > 0) {
         await window.api.createMovement({ type: 'PAYMENT', amount: additionalPayment, workId: work.id, observations: 'Pago vinculado a acopio multi-producto.' })
@@ -130,7 +160,7 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
       setStockpileItems([])
       setReceivedPayment('')
       setView('SUMMARY')
-      await refreshData()
+      await Promise.all([refreshData(), loadProducts()])
       success('Acopio registrado correctamente.')
     } catch (err) {
       console.error('[WorkDetail] saveStockpiles failed:', err)
@@ -295,6 +325,7 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
     const currentOpTotal = stockpileItems.reduce((acc, item) => acc + (parseFloat(item.quantity || '0') * parseFloat(item.price || '0')), 0)
 
     return (
+      <>
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
         <div className="flex items-center justify-between border-b pb-6">
           <div className="flex items-center gap-4">
@@ -305,7 +336,7 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
              </div>
           </div>
           <button
-            onClick={handleSaveStockpiles}
+            onClick={handleSaveStockpilesClick}
             disabled={stockpileItems.length === 0 || saving}
             className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-30"
           >
@@ -389,6 +420,54 @@ export default function WorkDetail({ work: initialWork, onBack }: WorkDetailProp
            </div>
         </div>
       </div>
+
+      {/* Price Update Modal - also available inside CREATE_STOCKPILE view */}
+      {showPriceModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-xl shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <AlertTriangle className="text-amber-500" />
+                Actualizar Precios Generales
+              </h3>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Modificaste el precio de los siguientes productos. ¿Cuáles deseas actualizar también en la lista general?
+            </p>
+            <div className="space-y-3 mb-8 max-h-[40vh] overflow-y-auto pr-2">
+              {priceUpdateItems.map((item) => (
+                <label key={item.productId} className="flex items-center gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={selectedUpdates.includes(item.productId)}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedUpdates(prev => [...prev, item.productId])
+                      else setSelectedUpdates(prev => prev.filter(id => id !== item.productId))
+                    }}
+                    className="w-5 h-5 text-blue-600 rounded border-gray-300"
+                  />
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-800">{item.description}</p>
+                    <div className="flex gap-4 text-sm mt-1">
+                      <span className="text-gray-500 line-through">Anterior: ${parseFloat(item.originalPrice).toLocaleString('es-AR')}</span>
+                      <span className="text-blue-600 font-bold">Nuevo: ${parseFloat(item.price).toLocaleString('es-AR')}</span>
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-4">
+              <button onClick={() => executeSaveStockpiles([])} className="flex-1 px-6 py-3 border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-colors">
+                No actualizar ninguno
+              </button>
+              <button onClick={() => executeSaveStockpiles(selectedUpdates)} className="flex-1 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100">
+                Confirmar y Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </>
     )
   }
 

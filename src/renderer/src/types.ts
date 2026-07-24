@@ -205,6 +205,13 @@ export interface CreateMovementItemInput {
   price: number
 }
 
+export interface CreateProductInput {
+  code: string
+  description: string
+  category?: string
+  price: number
+}
+
 export interface UpdateProductInput {
   description?: string
   category?: string
@@ -212,8 +219,21 @@ export interface UpdateProductInput {
   active?: boolean
 }
 
+export interface UpdateStockpileInput {
+  quantity?: number
+  withdrawn?: number
+  price?: number
+  observations?: string
+}
+
 export interface BackupResult {
   success: boolean
   path?: string
   error?: string
+}
+
+export interface ReportData {
+  balance: { credit: number; debt: number }
+  monthly: { month: string; pagos: number; entregas: number }[]
+  topProducts: { name: string; quantity: number }[]
 }

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Sistema de Gestión de Acopios - Pedemonte Materiales",
   "main": "./out/main/index.js",
-  "author": "Antigravity",
+  "author": "Pedemonte Materiales",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint . --ext .js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",
@@ -15,18 +15,76 @@
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "dist": "npm run build && electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.pedemonte.materiales",
+    "productName": "Acopios PM",
+    "copyright": "Copyright © 2025 Pedemonte Materiales",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "node_modules/**/*",
+      "!node_modules/.cache",
+      "!**/*.md",
+      "!prisma/dev.db",
+      "!prisma/dev.db-journal",
+      "!.env",
+      "!.env.*"
+    ],
+    "extraResources": [
+      {
+        "from": "prisma",
+        "to": "prisma",
+        "filter": [
+          "schema.prisma",
+          "migrations/**"
+        ]
+      },
+      {
+        "from": "src/main/generated/client",
+        "to": "prisma",
+        "filter": [
+          "query-engine-windows.exe"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Acopios PM",
+      "installerHeaderIcon": "resources/icon.ico",
+      "uninstallDisplayName": "Acopios PM - Pedemonte Materiales"
+    }
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
     "@prisma/client": "^5.14.0",
     "clsx": "^2.1.1",
+    "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.378.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "recharts": "^3.9.2",
     "tailwind-merge": "^2.3.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.2/xlsx-0.20.2.tgz"
   },
@@ -40,6 +98,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.19",
     "electron": "^30.0.6",
+    "electron-builder": "^24.13.3",
     "electron-vite": "^2.3.0",
     "eslint": "^8.57.0",
     "postcss": "^8.4.38",
@@ -48,5 +107,15 @@
     "tailwindcss": "^3.4.3",
     "typescript": "^5.4.5",
     "vite": "^5.2.11"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "core-js",
+      "electron",
+      "esbuild",
+      "prisma"
+    ]
   }
 }

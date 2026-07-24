@@ -53,9 +53,9 @@ export default function Deliveries() {
     if (!company) return
     try {
       await generateRemito(m, m.work!, company)
-      success('Remito generado.')
+      success('Comprobante de entrega generado.')
     } catch (err) {
-      error('No se pudo generar el remito.')
+      error('No se pudo generar el comprobante de entrega.')
     }
   }
 
@@ -81,7 +81,7 @@ export default function Deliveries() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Historial de Entregas</h2>
-          <p className="text-gray-500">Consulta y gestiona todos los remitos emitidos.</p>
+          <p className="text-gray-500">Consulta y gestiona todas las entregas emitidas.</p>
         </div>
       </div>
 

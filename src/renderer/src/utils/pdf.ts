@@ -1,6 +1,5 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import logoUrl from '../assets/company_logo.svg'
 import logoWhiteUrl from '../assets/company_logo_white.svg'
 
 import type { Movement, CompanyConfig } from '../types'
@@ -96,7 +95,7 @@ export const getRemitoData = async (
   const boxX = pw - margin - boxW
   doc.setFillColor(...WHITE); doc.roundedRect(boxX, 5, boxW, 28, 2, 2, 'F')
   doc.setFontSize(24); doc.setFont('helvetica', 'bold'); doc.setTextColor(...RED)
-  doc.text('REMITO', boxX + boxW / 2, 19, { align: 'center' })
+  doc.text('ENTREGA', boxX + boxW / 2, 19, { align: 'center' })
   doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(...GRAY)
   doc.text('Documento no válido como factura', boxX + boxW / 2, 26, { align: 'center' })
 
@@ -173,7 +172,7 @@ export const getRemitoData = async (
     startY: y,
     head: [['CÓDIGO', 'DESCRIPCIÓN', 'CANT.', 'UNID.', 'P. UNIT.', 'TOTAL']],
     body: tableRows,
-    foot: [['', '', '', '', 'TOTAL REMITO', currency(totalGeneral)]],
+    foot: [['', '', '', '', 'TOTAL ENTREGA', currency(totalGeneral)]],
     theme: 'grid',
     styles: { fontSize: 8, cellPadding: 2.5, textColor: DARK, lineColor: [210, 210, 210], lineWidth: 0.2 },
     headStyles: { fillColor: DARK, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5, halign: 'center' },
@@ -206,7 +205,7 @@ export const getRemitoData = async (
 
   const clientName = (work.client?.lastName ?? work.client?.name ?? 'cliente').replace(/\s+/g, '_')
   const dateStr = new Date(delivery.date).toISOString().split('T')[0]
-  const fileName = `Remito_${clientName}_${dateStr}_#${String(delivery.id).padStart(6, '0')}.pdf`
+  const fileName = `Entrega_${clientName}_${dateStr}_#${String(delivery.id).padStart(6, '0')}.pdf`
   doc.setProperties({ title: fileName.replace('.pdf', '') })
 
   return { buffer: doc.output('arraybuffer'), fileName }
@@ -228,7 +227,7 @@ export const shareRemitoWhatsApp = (delivery: Movement, work: WorkForRemito) => 
   const dateStr = formatDate(delivery.date)
   const itemsStr = (delivery.items ?? []).map(i => `• ${i.product?.description} x${i.quantity}`).join('\n')
   const withdrawer = delivery.withdrawer?.name ?? (work.client ? `${work.client.name} ${work.client.lastName ?? ''}`.trim() : 'Titular')
-  let message = `*Remito de Entrega - Pedemonte Materiales*\n\n`
+  let message = `*Comprobante de Entrega - Pedemonte Materiales*\n\n`
   message += `Fecha: *${dateStr}*\n`
   message += `Obra: *${work.name}*\n`
   message += `Retiró: *${withdrawer}*\n\n`
@@ -237,4 +236,55 @@ export const shareRemitoWhatsApp = (delivery: Movement, work: WorkForRemito) => 
   const url = `https://wa.me/${phone.startsWith('54') ? phone : '54' + phone}?text=${encodeURIComponent(message)}`
   window.open(url, '_blank')
   return true
+}
+
+export async function generateReportsPDF(
+  _data: any,
+  charts: {
+    balance: string
+    monthly: string
+    cashflow: string
+    topProducts: string
+  }
+) {
+  const doc = new jsPDF()
+
+  // Logo
+  const logo = await loadImageAsBase64(logoWhiteUrl)
+  doc.setFillColor(RED[0], RED[1], RED[2])
+  doc.rect(0, 0, 210, 30, 'F')
+  doc.addImage(logo.data, 'PNG', 14, 5, 40, (40 * logo.height) / logo.width)
+
+  doc.setTextColor(WHITE[0], WHITE[1], WHITE[2])
+  doc.setFontSize(16)
+  doc.setFont('helvetica', 'bold')
+  doc.text('REPORTE FINANCIERO Y DE STOCK', 196, 15, { align: 'right' })
+
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Fecha: ${new Date().toLocaleDateString('es-AR')}`, 196, 22, { align: 'right' })
+
+  doc.setTextColor(DARK[0], DARK[1], DARK[2])
+
+  // Balance
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text('1. Balance General', 14, 45)
+  if (charts.balance) doc.addImage(charts.balance, 'PNG', 14, 50, 85, 70)
+
+  // Top Products
+  doc.text('2. Top Materiales Más Acopiados', 110, 45)
+  if (charts.topProducts) doc.addImage(charts.topProducts, 'PNG', 110, 50, 85, 70)
+
+  // Monthly
+  doc.text('3. Pagos vs Entregas Mensuales', 14, 130)
+  if (charts.monthly) doc.addImage(charts.monthly, 'PNG', 14, 135, 180, 60)
+
+  // Cashflow
+  doc.text('4. Flujo de Caja Anual', 14, 205)
+  if (charts.cashflow) doc.addImage(charts.cashflow, 'PNG', 14, 210, 180, 60)
+
+  // Save to buffer
+  const buffer = doc.output('arraybuffer')
+  await window.api.openPdf(buffer, `Reporte_Estadistico.pdf`)
 }

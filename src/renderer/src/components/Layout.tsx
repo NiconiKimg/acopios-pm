@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { LayoutDashboard, Users, Package, Settings, ClipboardCheck, Truck } from 'lucide-react'
+import { LayoutDashboard, Users, Package, Settings, ClipboardCheck, Truck, BarChart2 } from 'lucide-react'
 import logoUrl from '../assets/company_logo.svg'
 
 interface LayoutProps {
@@ -15,7 +15,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
     { id: 'acopios', label: 'Acopios', icon: ClipboardCheck },
     { id: 'deliveries', label: 'Entregas', icon: Truck },
     { id: 'inventory', label: 'Productos', icon: Package },
-    // { id: 'history', label: 'Historial', icon: History },
+    { id: 'reports', label: 'Reportes', icon: BarChart2 },
   ]
 
 

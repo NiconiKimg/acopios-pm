@@ -6,9 +6,10 @@ import Products from './components/Products'
 import Acopios from './components/Acopios'
 import Settings from './components/Settings'
 import Deliveries from './components/Deliveries'
+import Reports from './components/Reports'
 import { ToastContainer } from './components/Toast'
 
-type Tab = 'dashboard' | 'clients' | 'inventory' | 'acopios' | 'settings' | 'deliveries'
+type Tab = 'dashboard' | 'clients' | 'inventory' | 'acopios' | 'settings' | 'deliveries' | 'reports'
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
@@ -25,6 +26,8 @@ function App() {
         return <Acopios />
       case 'deliveries':
         return <Deliveries />
+      case 'reports':
+        return <Reports />
       case 'settings':
         return <Settings />
       default:

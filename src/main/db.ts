@@ -1,22 +1,172 @@
-import { PrismaClient } from '@prisma/client'
 import * as fs from 'fs'
 import * as path from 'path'
 import { app } from 'electron'
 import { parseExcel } from './parser'
+import { spawn } from 'child_process'
 
-// ─── Prisma singleton ────────────────────────────────────────────────────────
-// In dev we use a global singleton to survive hot-reloads.
-// In production we instantiate once and reuse.
-declare global {
-  // eslint-disable-next-line no-var
-  var __prisma: PrismaClient | undefined
+// Monkey-patch spawn to allow spawning the query engine outside ASAR in production
+const originalSpawn = spawn
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+require('child_process').spawn = function (command: string, args?: string[], options?: any) {
+  const isPrisma =
+    command.includes('query-engine') ||
+    (args && args.some((arg) => typeof arg === 'string' && arg.includes('query-engine')))
+  if (isPrisma) {
+    const originalNoAsar = process.noAsar
+    process.noAsar = true
+
+    // Fix: Windows cannot spawn a process if its working directory (cwd) is inside app.asar.
+    // We override it to a real directory on disk (process.resourcesPath).
+    const patchedOptions = options ? { ...options } : {}
+    if (
+      patchedOptions.cwd &&
+      typeof patchedOptions.cwd === 'string' &&
+      patchedOptions.cwd.includes('app.asar')
+    ) {
+      patchedOptions.cwd = process.resourcesPath
+    }
+
+    // Fix: Prisma passes the schema.prisma path via environment variables inside options.env.
+    // If it points inside the ASAR archive, we point it to the external resources directory instead.
+    if (patchedOptions.env) {
+      patchedOptions.env = { ...patchedOptions.env }
+      if (
+        patchedOptions.env.PRISMA_DML_PATH &&
+        typeof patchedOptions.env.PRISMA_DML_PATH === 'string' &&
+        patchedOptions.env.PRISMA_DML_PATH.includes('app.asar')
+      ) {
+        patchedOptions.env.PRISMA_DML_PATH = path.join(
+          process.resourcesPath,
+          'prisma',
+          'schema.prisma'
+        )
+      }
+    }
+
+    try {
+      return originalSpawn(command, args, patchedOptions)
+    } finally {
+      process.noAsar = originalNoAsar
+    }
+  }
+  return originalSpawn(command, args, options)
 }
 
-const prisma: PrismaClient =
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const PrismaLocal = require('./generated/client')
+
+// Resolving DB paths and Engines in Production
+if (app.isPackaged) {
+  const userDataPath = app.getPath('userData')
+  if (!fs.existsSync(userDataPath)) {
+    fs.mkdirSync(userDataPath, { recursive: true })
+  }
+  const dbPath = path.join(userDataPath, 'app.db')
+  process.env.DATABASE_URL = `file:${dbPath}`
+
+  // Point explicitly to the query engine bundled in resources/prisma
+  const enginePath = path.join(process.resourcesPath, 'prisma', 'query-engine-windows.exe')
+  process.env.PRISMA_QUERY_ENGINE_BINARY = enginePath
+
+  // Point explicitly to the schema.prisma file outside the ASAR archive
+  const schemaPath = path.join(process.resourcesPath, 'prisma', 'schema.prisma')
+  process.env.PRISMA_DML_PATH = schemaPath
+}
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __prisma: any
+}
+
+const prisma: any =
   global.__prisma ??
-  new PrismaClient({
+  new PrismaLocal.PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error']
   })
+
+
+
+/**
+ * Runs SQL migrations sequentially.
+ * This completely avoids bundling Prisma CLI in the production build.
+ */
+export async function runDatabaseMigrations() {
+  const migrationsPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'prisma', 'migrations')
+    : path.join(__dirname, '..', '..', '..', 'prisma', 'migrations')
+
+  if (!fs.existsSync(migrationsPath)) {
+    console.error('[db] Migrations folder not found at', migrationsPath)
+    return
+  }
+
+  const folders = fs.readdirSync(migrationsPath)
+    .filter(f => fs.lstatSync(path.join(migrationsPath, f)).isDirectory() && f.match(/^\d+_/))
+    .sort()
+
+  // Ensure migrations table exists
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
+        "id" TEXT PRIMARY KEY NOT NULL,
+        "checksum" TEXT NOT NULL,
+        "finished_at" DATETIME,
+        "migration_name" TEXT NOT NULL,
+        "logs" TEXT,
+        "rolled_back_at" DATETIME,
+        "started_at" DATETIME DEFAULT CURRENT_TIMESTAMP,
+        "applied_steps_count" INTEGER DEFAULT 0
+      );
+    `)
+  } catch (err) {
+    console.error('[db] Error creating migrations table:', err)
+  }
+
+  let applied: string[] = []
+  try {
+    const rows = (await prisma.$queryRawUnsafe('SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL')) as any[]
+    applied = rows.map(r => r.migration_name)
+  } catch (e) {
+    console.warn('[db] No completed migrations found.')
+  }
+
+  for (const folder of folders) {
+    if (!applied.includes(folder)) {
+      console.log(`[db] Applying migration ${folder}...`)
+      const sqlPath = path.join(migrationsPath, folder, 'migration.sql')
+      if (fs.existsSync(sqlPath)) {
+        const sql = fs.readFileSync(sqlPath, 'utf8')
+        
+        // Execute SQL commands split by semicolon (excluding commented lines)
+        const queries = sql.split(';')
+        
+        await prisma.$transaction(async (tx) => {
+          for (let query of queries) {
+            // Clean query by removing comments and blank lines
+            const cleanedQuery = query
+              .split('\n')
+              .map((line) => line.trim())
+              .filter((line) => line && !line.startsWith('--'))
+              .join(' ')
+              .trim()
+
+            if (cleanedQuery) {
+              await tx.$executeRawUnsafe(cleanedQuery)
+            }
+          }
+          const randomId = Math.random().toString(36).substring(2) + Date.now().toString(36)
+          await tx.$executeRawUnsafe(`
+            INSERT INTO "_prisma_migrations" (id, checksum, finished_at, migration_name, started_at)
+            VALUES ('${randomId}', 'dummy-checksum', CURRENT_TIMESTAMP, '${folder}', CURRENT_TIMESTAMP)
+          `)
+        })
+        console.log(`[db] Migration ${folder} applied.`)
+      }
+    }
+  }
+}
+
 
 if (process.env.NODE_ENV !== 'production') {
   global.__prisma = prisma
@@ -49,6 +199,8 @@ const DEFAULT_CONFIG = {
 // ─── DB layer ────────────────────────────────────────────────────────────────
 
 export const db = {
+  disconnectDb: () => prisma.$disconnect(),
+
   // ── Company Config ─────────────────────────────────────────────────────────
 
   getCompanyConfig: (): typeof DEFAULT_CONFIG => {
@@ -133,6 +285,81 @@ export const db = {
             ? `Pago: $${m.amount?.toLocaleString('es-AR')}`
             : m.items.map((i) => `${i.product.description} x${i.quantity}`).join(', ')
       }))
+    }
+  },
+
+  getReportData: async () => {
+    // 1. Fetch data
+    const payments = await prisma.movement.findMany({
+      where: { type: 'PAYMENT' },
+      select: { amount: true, date: true }
+    })
+    
+    const deliveries = await prisma.movement.findMany({
+      where: { type: 'DELIVERY' },
+      select: { date: true, items: { select: { quantity: true, price: true } } }
+    })
+    
+    const stockpiles = await prisma.stockpile.findMany({
+      select: { quantity: true, price: true, withdrawn: true, product: { select: { description: true } } }
+    })
+    
+    const works = await prisma.work.findMany({
+      include: {
+        movements: { select: { type: true, amount: true } },
+        stockpiles: { select: { quantity: true, price: true } }
+      }
+    })
+
+    // 2. Balance General (Total a Favor vs Deuda Global)
+    let globalCredit = 0
+    let globalDebt = 0
+    works.forEach(w => {
+      const wPaid = w.movements.filter(m => m.type === 'PAYMENT').reduce((acc, m) => acc + (m.amount || 0), 0)
+      const wStockpiled = w.stockpiles.reduce((acc, s) => acc + (s.quantity * s.price), 0)
+      const wBalance = wPaid - wStockpiled
+      if (wBalance >= 0) globalCredit += wBalance
+      else globalDebt += Math.abs(wBalance)
+    })
+
+    // 3. Evolución Mensual (Últimos 12 meses)
+    const monthlyData: Record<string, { month: string; pagos: number; entregas: number }> = {}
+    const now = new Date()
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      const monthName = d.toLocaleString('es-ES', { month: 'short', year: '2-digit' })
+      monthlyData[key] = { month: monthName, pagos: 0, entregas: 0 }
+    }
+
+    payments.forEach(p => {
+      const key = `${p.date.getFullYear()}-${String(p.date.getMonth() + 1).padStart(2, '0')}`
+      if (monthlyData[key]) monthlyData[key].pagos += p.amount || 0
+    })
+
+    deliveries.forEach(d => {
+      const key = `${d.date.getFullYear()}-${String(d.date.getMonth() + 1).padStart(2, '0')}`
+      if (monthlyData[key]) {
+        const deliveryValue = d.items.reduce((acc, i) => acc + (i.quantity * i.price), 0)
+        monthlyData[key].entregas += deliveryValue
+      }
+    })
+
+    const monthlyChart = Object.values(monthlyData)
+
+    // 4. Top 5 Productos (Por cantidad histórica acopiada)
+    const productStats: Record<string, { name: string; quantity: number }> = {}
+    stockpiles.forEach(s => {
+      const name = s.product.description
+      if (!productStats[name]) productStats[name] = { name, quantity: 0 }
+      productStats[name].quantity += s.quantity
+    })
+    const topProducts = Object.values(productStats).sort((a, b) => b.quantity - a.quantity).slice(0, 5)
+
+    return {
+      balance: { credit: globalCredit, debt: globalDebt },
+      monthly: monthlyChart,
+      topProducts
     }
   },
 
@@ -240,6 +467,12 @@ export const db = {
 
   // ── Products ───────────────────────────────────────────────────────────────
 
+  createProduct: async (data: { code: string; description: string; category?: string; price: number }) => {
+    const product = await prisma.product.create({ data })
+    await prisma.priceHistory.create({ data: { productId: data.code, price: data.price } })
+    return product
+  },
+
   getProducts: () =>
     prisma.product.findMany({
       orderBy: { description: 'asc' }
@@ -254,10 +487,10 @@ export const db = {
     const parsed = Array.from(deduped.values())
 
     const codes = parsed.map((p) => p.code)
-    const existing = await prisma.product.findMany({
+    const existing = (await prisma.product.findMany({
       where: { code: { in: codes } },
       select: { code: true, price: true, description: true }
-    })
+    })) as any[]
     const existingMap = new Map(existing.map((e) => [e.code, e]))
 
     return parsed.map(p => {
@@ -286,10 +519,9 @@ export const db = {
     const parsed = Array.from(deduped.values())
 
     const codes = parsed.map((p) => p.code)
-    const existing = await prisma.product.findMany({
-      where: { code: { in: codes } },
-      select: { code: true, price: true }
-    })
+    const existing = (await prisma.product.findMany({
+      where: { code: { in: codes } }
+    })) as any[]
     const existingMap = new Map(existing.map((e) => [e.code, e.price]))
 
     const toCreate = parsed.filter((p) => !existingMap.has(p.code))
@@ -431,7 +663,7 @@ export const db = {
     observations?: string
   }) => prisma.stockpile.create({ data }),
 
-  updateStockpile: (id: number, data: Partial<{ quantity: number; withdrawn: number; observations: string }>) =>
+  updateStockpile: (id: number, data: Partial<{ quantity: number; withdrawn: number; price: number; observations: string }>) =>
     prisma.stockpile.update({ where: { id }, data }),
 
   getStockpiles: (workId?: number) => {

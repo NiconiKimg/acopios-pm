@@ -15,8 +15,11 @@ import type {
   CreateClientInput,
   CreateWorkInput,
   CreateStockpileInput,
+  UpdateStockpileInput,
   CreateMovementInput,
-  UpdateProductInput
+  CreateProductInput,
+  UpdateProductInput,
+  ReportData
 } from './types'
 
 declare global {
@@ -37,6 +40,7 @@ declare global {
 
       // Products
       getProducts: () => Promise<Product[]>
+      createProduct: (data: CreateProductInput) => Promise<Product>
       analyzeProductImport: () => Promise<{ filePath: string, analysis: any[] } | null>
       importProducts: (filePath: string) => Promise<{ added: number, updated: number, unchanged: number }>
       updateProduct: (code: string, data: UpdateProductInput) => Promise<Product>
@@ -45,7 +49,7 @@ declare global {
       // Stockpiles
       getStockpiles: (workId?: number) => Promise<Stockpile[]>
       createStockpile: (data: CreateStockpileInput) => Promise<Stockpile>
-      updateStockpile: (id: number, data: Partial<CreateStockpileInput>) => Promise<Stockpile>
+      updateStockpile: (id: number, data: UpdateStockpileInput) => Promise<Stockpile>
 
       // Movements
       getMovements: (workId: number) => Promise<Movement[]>
@@ -53,6 +57,7 @@ declare global {
 
       // Dashboard
       getStats: () => Promise<DashboardStats>
+      getReportData: () => Promise<ReportData>
       getPriceAtDate: (productId: string, date: string) => Promise<number>
       getWorkFrozenDate: (workId: number) => Promise<string | null>
 
@@ -64,8 +69,12 @@ declare global {
       getGlobalHistory: (page?: number, pageSize?: number, search?: string) => Promise<GlobalHistoryResponse>
       getDeliveries: (page?: number, pageSize?: number, filters?: { search?: string, startDate?: string, endDate?: string }) => Promise<{ items: Movement[], total: number, page: number, pageSize: number }>
 
+      // UI Helpers
+      showConfirmDialog: (message: string) => Promise<boolean>
+
       // Backup
       createBackup: () => Promise<BackupResult>
+      restoreBackup: () => Promise<{ success: boolean; error?: string }>
 
       // PDF
       openPdf: (buffer: ArrayBuffer, fileName: string) => Promise<boolean>

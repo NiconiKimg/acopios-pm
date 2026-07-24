@@ -4,7 +4,9 @@ import type {
   CreateClientInput,
   CreateWorkInput,
   CreateStockpileInput,
+  UpdateStockpileInput,
   CreateMovementInput,
+  CreateProductInput,
   UpdateProductInput,
   CompanyConfig
 } from '../renderer/src/types'
@@ -26,6 +28,7 @@ const api = {
 
   // ── Products ──────────────────────────────────────────────────────────────
   getProducts: () => ipcRenderer.invoke('get-products'),
+  createProduct: (data: CreateProductInput) => ipcRenderer.invoke('create-product', data),
   analyzeProductImport: () => ipcRenderer.invoke('analyze-product-import'),
   importProducts: (filePath: string) => ipcRenderer.invoke('import-products', filePath),
   updateProduct: (code: string, data: UpdateProductInput) =>
@@ -35,7 +38,7 @@ const api = {
   // ── Stockpiles ────────────────────────────────────────────────────────────
   getStockpiles: (workId?: number) => ipcRenderer.invoke('get-stockpiles', workId),
   createStockpile: (data: CreateStockpileInput) => ipcRenderer.invoke('create-stockpile', data),
-  updateStockpile: (id: number, data: Partial<CreateStockpileInput>) =>
+  updateStockpile: (id: number, data: UpdateStockpileInput) =>
     ipcRenderer.invoke('update-stockpile', id, data),
 
   // ── Movements ─────────────────────────────────────────────────────────────
@@ -44,6 +47,7 @@ const api = {
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
   getStats: () => ipcRenderer.invoke('get-stats'),
+  getReportData: () => ipcRenderer.invoke('get-report-data'),
   getPriceAtDate: (productId: string, date: string) => ipcRenderer.invoke('get-price-at-date', productId, date),
   getWorkFrozenDate: (workId: number) => ipcRenderer.invoke('get-work-frozen-date', workId),
 
@@ -58,8 +62,12 @@ const api = {
   getDeliveries: (page?: number, pageSize?: number, filters?: any) =>
     ipcRenderer.invoke('get-deliveries', page, pageSize, filters),
 
+  // ── UI Helpers ────────────────────────────────────────────────────────────
+  showConfirmDialog: (message: string) => ipcRenderer.invoke('show-confirm', message),
+
   // ── Backup ────────────────────────────────────────────────────────────────
   createBackup: () => ipcRenderer.invoke('create-backup'),
+  restoreBackup: () => ipcRenderer.invoke('restore-backup'),
 
   // ── PDF ───────────────────────────────────────────────────────────────────
   openPdf: (buffer: ArrayBuffer, fileName: string) => ipcRenderer.invoke('open-pdf', buffer, fileName),
